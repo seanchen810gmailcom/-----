@@ -1,6 +1,67 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 虛擬環境
 .env
-.DS_Store
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE 設定檔
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系統檔案
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 日誌檔案
 *.log
+
+# 臨時檔案
+tempCodeRunnerFile.py
+temp*.py
+tmp/
+
+# Pygame 相關
+*.wav
+*.mp3
+*.ogg
+
+# 專案特定檔案
+image/*.png
+image/*.jpg
+image/*.jpeg
+image/*.gif
+!image/.gitkeep
