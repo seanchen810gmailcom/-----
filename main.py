@@ -12,6 +12,7 @@ import pygame
 import sys
 import math
 import random
+from collections import deque
 
 
 ###################### 物件類別：磚塊 ######################
@@ -68,29 +69,44 @@ def explode_tnt(tnt_brick, all_bricks):
     返回：
     - 被炸掉的磚塊數量
     """
+    # 使用佇列處理連鎖爆炸（BFS）
     exploded_count = 0
     explosion_radius = 100  # 爆炸半徑（像素）
 
-    # TNT磚塊的中心點
-    tnt_center_x = tnt_brick.x + tnt_brick.width // 2
-    tnt_center_y = tnt_brick.y + tnt_brick.height // 2
+    queue = deque()
 
-    for brick in all_bricks:
-        if not brick.hit:  # 只檢查還沒被擊中的磚塊
-            # 計算磚塊中心點
+    # 若傳入的 tnt_brick 尚未被標記為 hit（例如在測試中），則先標記並計數
+    if not tnt_brick.hit:
+        tnt_brick.hit = True
+        exploded_count += 1
+
+    # 無論如何，將這顆 TNT 加入處理佇列以檢查其範圍內的磚塊
+    queue.append(tnt_brick)
+
+    while queue:
+        current = queue.popleft()
+        cur_center_x = current.x + current.width // 2
+        cur_center_y = current.y + current.height // 2
+
+        # 檢查所有尚未被摧毀的磚塊
+        for brick in all_bricks:
+            if brick.hit:
+                continue
+
             brick_center_x = brick.x + brick.width // 2
             brick_center_y = brick.y + brick.height // 2
-
-            # 計算距離
-            distance = math.sqrt(
-                (tnt_center_x - brick_center_x) ** 2
-                + (tnt_center_y - brick_center_y) ** 2
+            distance = math.hypot(
+                cur_center_x - brick_center_x, cur_center_y - brick_center_y
             )
 
-            # 如果在爆炸範圍內，炸掉這個磚塊
             if distance <= explosion_radius:
+                # 這個磚塊會被炸掉
                 brick.hit = True
                 exploded_count += 1
+
+                # 如果被炸到的也是TNT，加入佇列以觸發連鎖
+                if brick.is_tnt:
+                    queue.append(brick)
 
     return exploded_count
 
@@ -390,8 +406,8 @@ paddle = Paddle(
 # 球設定
 BALL_RADIUS = 10
 BALL_COLOR = (255, 255, 0)  # 黃色
-BALL_SPEED = 12  # 移動速度（固定為12）
-BALL_MAX_SPEED = 12  # 保留常數，但速度不會改變
+BALL_SPEED = 7  # 移動速度（固定為12）
+BALL_MAX_SPEED = 9  # 保留常數，但速度不會改變
 
 # 建立球物件（初始位置會在update中設定為黏在底板上）
 ball = Ball(

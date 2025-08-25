@@ -4,6 +4,10 @@
 測試TNT功能的簡單腳本
 """
 
+import os
+
+# 在 headless 測試環境中避免 pygame 嘗試啟動視窗，先設定 dummy driver
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 import pygame
 import sys
 import math
@@ -14,6 +18,7 @@ import importlib.util
 
 spec = importlib.util.spec_from_file_location("main", "./main.py")
 main_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(main_module)
 
 
 # 重新定義必要的類別和函數來測試
@@ -29,32 +34,8 @@ class Brick:
 
 
 def explode_tnt(tnt_brick, all_bricks):
-    """處理TNT磚塊爆炸，炸掉周圍的磚塊。"""
-    exploded_count = 0
-    explosion_radius = 100  # 爆炸半徑（像素）
-
-    # TNT磚塊的中心點
-    tnt_center_x = tnt_brick.x + tnt_brick.width // 2
-    tnt_center_y = tnt_brick.y + tnt_brick.height // 2
-
-    for brick in all_bricks:
-        if not brick.hit:  # 只檢查還沒被擊中的磚塊
-            # 計算磚塊中心點
-            brick_center_x = brick.x + brick.width // 2
-            brick_center_y = brick.y + brick.height // 2
-
-            # 計算距離
-            distance = math.sqrt(
-                (tnt_center_x - brick_center_x) ** 2
-                + (tnt_center_y - brick_center_y) ** 2
-            )
-
-            # 如果在爆炸範圍內，炸掉這個磚塊
-            if distance <= explosion_radius:
-                brick.hit = True
-                exploded_count += 1
-
-    return exploded_count
+    # 使用 main.py 中的 explode_tnt
+    return main_module.explode_tnt(tnt_brick, all_bricks)
 
 
 def test_tnt_explosion():
@@ -122,6 +103,40 @@ def test_tnt_selection():
         return True
     else:
         print(f"✗ TNT磚塊選擇測試失敗！期望5個，實際{tnt_count}個")
+        return False
+
+
+def test_tnt_chain_reaction():
+    """測試TNT連鎖反應：當一個TNT炸到另一個TNT，另一個也會爆炸"""
+    print("\n開始測試TNT連鎖反應...")
+
+    # 創建三個TNT：中間一顆被引爆，左右兩顆在爆炸範圍內
+    bricks = []
+    brick_width = 60
+    brick_height = 30
+
+    # 左TNT
+    bricks.append(Brick(50, 50, brick_width, brick_height, (139, 69, 19), True))
+    # 中心TNT（引爆源）
+    bricks.append(Brick(130, 50, brick_width, brick_height, (139, 69, 19), True))
+    # 右TNT
+    bricks.append(Brick(210, 50, brick_width, brick_height, (139, 69, 19), True))
+
+    # 先確保沒有磚塊被標記為 hit
+    for b in bricks:
+        b.hit = False
+
+    exploded_count = explode_tnt(bricks[1], bricks)
+    print(f"爆炸摧毀了 {exploded_count} 個磚塊 (期望3個)")
+
+    hit_bricks = [i for i, brick in enumerate(bricks) if brick.hit]
+    print(f"被摧毀的磚塊索引：{hit_bricks}")
+
+    if exploded_count == 3:
+        print("✓ TNT連鎖反應測試通過！")
+        return True
+    else:
+        print(f"✗ TNT連鎖反應測試失敗！期望3個，實際{exploded_count}個")
         return False
 
 
