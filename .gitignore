@@ -53,11 +53,17 @@ Thumbs.db
 tempCodeRunnerFile.py
 temp*.py
 tmp/
+test_*.py
 
 # Pygame 相關
 *.wav
 *.mp3
 *.ogg
+
+# 遊戲相關
+screenshots/
+replays/
+saves/
 
 # 專案特定檔案
 image/*.png

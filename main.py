@@ -34,17 +34,64 @@ class Brick:
         self.height = height
         # 顏色為 (R, G, B)
         self.color = color
+        # 保存原始顏色（用於重置）
+        self.base_color = color
         # 被擊中狀態
         self.hit = False
         # 是否為TNT磚塊
         self.is_tnt = is_tnt
+        # TNT 觸發（priming）相關狀態
+        # 被球擊中時不立即爆炸，而是進入閃爍倒數狀態
+        self.tnt_primed = False
+        # 以 pygame.time.get_ticks() 為基準的起始時間（毫秒）
+        self.tnt_primed_start = 0
+        # 已完成的紅白週期數（每個週期為紅0.5s + 白0.5s）
+        self.tnt_primed_cycles = 0
+        # 單一紅或白的持續時間（毫秒）
+        self.tnt_blink_duration = 500
+        # 要重複的紅白週期數，達到後爆炸
+        self.tnt_blink_repeats = 3
+        # 是否為會閃爍（特殊）磚塊
+        self.is_blinking = False
+        # 閃爍參數（毫秒為單位）
+        self.blink_period = 1200
+        # 隨機位移讓多顆磚的閃爍不同步
+        self.blink_offset = random.randint(0, 1000)
+        # 下落相關屬性
+        self.falling = False
+        self.target_y = y
+        self.fall_speed = 2
 
     def draw(self, surface):
         """在傳入的 surface 上繪製磚塊（若尚未被擊中）。"""
         if not self.hit:
+            draw_color = self.color
+            # 如果是會閃爍的磚塊，計算漸變色（淡藍色的亮/微暗變化）
+            if self.is_blinking:
+                # 淡藍色基準（亮亮的淡藍色）
+                color_a = (173, 216, 230)  # lightblue
+                color_b = (224, 255, 255)  # 更亮的淡藍
+                t = (pygame.time.get_ticks() + self.blink_offset) % self.blink_period
+                # 產生 0..1 的週期值，使用正弦讓變化平滑
+                factor = (math.sin(2 * math.pi * (t / self.blink_period)) * 0.5) + 0.5
+                draw_color = (
+                    int(color_a[0] * (1 - factor) + color_b[0] * factor),
+                    int(color_a[1] * (1 - factor) + color_b[1] * factor),
+                    int(color_a[2] * (1 - factor) + color_b[2] * factor),
+                )
+
+            # 如果是被觸發的 TNT，優先以紅/白閃爍顏色顯示
+            if self.is_tnt and self.tnt_primed and not self.hit:
+                # 計算目前階段（紅或白）
+                t = pygame.time.get_ticks() - self.tnt_primed_start
+                period = self.tnt_blink_duration * 2
+                phase = (t % period) < self.tnt_blink_duration
+                # phase True 表示紅色階段，False 表示白色
+                draw_color = (255, 0, 0) if phase else (255, 255, 255)
+
             pygame.draw.rect(
                 surface,
-                self.color,
+                draw_color,
                 pygame.Rect(self.x, self.y, self.width, self.height),
             )
 
@@ -56,6 +103,48 @@ class Brick:
                     center=(self.x + self.width // 2, self.y + self.height // 2)
                 )
                 surface.blit(text, text_rect)
+
+    def start_priming(self):
+        """當球打到 TNT 時呼叫，開始紅白閃爍倒數。
+
+        若已在倒數中則不重複啟動。
+        """
+        if not self.is_tnt:
+            return
+        if self.tnt_primed or self.hit:
+            return
+        self.tnt_primed = True
+        self.tnt_primed_start = pygame.time.get_ticks()
+        self.tnt_primed_cycles = 0
+
+    def update(self, now, all_bricks):
+        """每幀更新磚塊的狀態：用於處理 TNT 的閃爍與爆炸觸發，以及下落動畫。
+
+        - now: pygame.time.get_ticks()
+        - all_bricks: 傳入整個磚塊列表以便爆炸時傳遞
+        """
+        # 處理下落動畫
+        if self.falling:
+            if self.y < self.target_y:
+                self.y += self.fall_speed
+                if self.y >= self.target_y:
+                    self.y = self.target_y
+                    self.falling = False
+
+        # 只處理未被摧毀且已經進入 priming 的 TNT
+        if self.is_tnt and self.tnt_primed and not self.hit:
+            elapsed = now - self.tnt_primed_start
+            one_cycle = self.tnt_blink_duration * 2
+            cycles_completed = elapsed // one_cycle
+            # 當達到設定的 cycle 次數後觸發爆炸
+            if cycles_completed >= self.tnt_blink_repeats:
+                # 呼叫爆炸處理（explode_tnt 會標記 self.hit 等）
+                explode_tnt(self, all_bricks)
+                # 關閉 priming（explode_tnt 會標記 hit）
+                self.tnt_primed = False
+            else:
+                # 否則僅更新 cycle 計數（視覺由 draw 計算）
+                self.tnt_primed_cycles = cycles_completed
 
 
 ###################### TNT爆炸函數 ######################
@@ -69,16 +158,24 @@ def explode_tnt(tnt_brick, all_bricks):
     返回：
     - 被炸掉的磚塊數量
     """
+    global score, explosions
+
     # 使用佇列處理連鎖爆炸（BFS）
     exploded_count = 0
     explosion_radius = 100  # 爆炸半徑（像素）
 
     queue = deque()
 
+    # 添加爆炸效果
+    explosion_x = tnt_brick.x + tnt_brick.width // 2
+    explosion_y = tnt_brick.y + tnt_brick.height // 2
+    explosions.append(Explosion(explosion_x, explosion_y))
+
     # 若傳入的 tnt_brick 尚未被標記為 hit（例如在測試中），則先標記並計數
     if not tnt_brick.hit:
         tnt_brick.hit = True
         exploded_count += 1
+        score += 100  # TNT 爆炸也得分
 
     # 無論如何，將這顆 TNT 加入處理佇列以檢查其範圍內的磚塊
     queue.append(tnt_brick)
@@ -103,10 +200,14 @@ def explode_tnt(tnt_brick, all_bricks):
                 # 這個磚塊會被炸掉
                 brick.hit = True
                 exploded_count += 1
+                score += 100  # 每個被炸掉的磚塊得100分
 
-                # 如果被炸到的也是TNT，加入佇列以觸發連鎖
+                # 如果被炸到的也是TNT，加入佇列以觸發連鎖，並添加爆炸效果
                 if brick.is_tnt:
                     queue.append(brick)
+                    explosion_x = brick.x + brick.width // 2
+                    explosion_y = brick.y + brick.height // 2
+                    explosions.append(Explosion(explosion_x, explosion_y))
 
     return exploded_count
 
@@ -187,7 +288,7 @@ class Ball:
         self.spin_angle = 0.0
         self.spin_angular_speed = 0.15  # 弧度/幀
 
-    def update(self, paddle, bricks, screen_width, screen_height):
+    def update(self, paddle, bricks, screen_width, screen_height, balls_list=None):
         """更新球的位置並處理碰撞。"""
         # 球速在本需求中固定為常數（BALL_SPEED），不會在遊戲過程中改變
 
@@ -248,11 +349,27 @@ class Ball:
         # 檢查與磚塊的碰撞
         for brick in bricks:
             if not brick.hit and self.check_brick_collision(brick):
-                brick.hit = True
-
-                # 如果撞到的是TNT磚塊，觸發爆炸
+                # 若是 TNT，啟動 priming（閃爍倒數）而不是立即爆炸
                 if brick.is_tnt:
-                    explode_tnt(brick, bricks)
+                    brick.start_priming()
+                else:
+                    # 非 TNT 磚塊直接標記為被擊中
+                    brick.hit = True
+                    # 增加得分（全域變數）
+                    global score
+                    score += 100
+
+                # 如果撞到的是會閃爍的特殊磚塊，額外生成兩顆球（若有提供 balls_list）
+                if brick.is_blinking and balls_list is not None:
+                    # 產生兩顆新球，位置為撞擊位置附近，速度為隨機方向
+                    for _ in range(2):
+                        nb = Ball(self.x, self.y, self.radius, self.color, self.speed)
+                        nb.stuck = False
+                        # 以稍微不同的隨機角度發射
+                        angle = random.uniform(-math.pi, math.pi)
+                        nb.vx = math.cos(angle) * nb.speed
+                        nb.vy = math.sin(angle) * nb.speed
+                        balls_list.append(nb)
 
                 # 簡單的反彈邏輯
                 if self.x < brick.x or self.x > brick.x + brick.width:
@@ -360,6 +477,54 @@ BRICK_WIDTH = (
 ) // BRICK_COLS
 BRICK_HEIGHT = 30
 
+
+def create_new_bricks():
+    """創建新的磚塊陣列，從視窗上方開始滑下"""
+    new_bricks = []
+    row_colors = [
+        (255, 99, 71),  # tomato
+        (255, 165, 0),  # orange
+        (255, 215, 0),  # gold
+        (60, 179, 113),  # medium sea green
+        (65, 105, 225),  # royal blue
+    ]
+
+    # 首先創建所有磚塊（從視窗上方開始，y座標為負數讓它們滑下來）
+    for row in range(BRICK_ROWS):
+        for col in range(BRICK_COLS):
+            x = BRICK_MARGIN_LEFT + col * (BRICK_WIDTH + BRICK_SPACING_X)
+            y = -BRICK_HEIGHT * (BRICK_ROWS - row) + row * (
+                BRICK_HEIGHT + BRICK_SPACING_Y
+            )  # 從上方開始
+            color = row_colors[row % len(row_colors)]
+            brick = Brick(x, y, BRICK_WIDTH, BRICK_HEIGHT, color)
+            brick.target_y = BRICK_MARGIN_TOP + row * (
+                BRICK_HEIGHT + BRICK_SPACING_Y
+            )  # 目標位置
+            brick.falling = True  # 標記為下落狀態
+            new_bricks.append(brick)
+
+    # 隨機選擇5個磚塊設為TNT磚塊
+    tnt_indices = random.sample(range(len(new_bricks)), 5)
+    for i in tnt_indices:
+        new_bricks[i].is_tnt = True
+        # TNT磚塊使用較暗的顏色以便區分
+        new_bricks[i].color = (139, 69, 19)  # 棕色
+
+    # 選擇 6 個非TNT 的磚塊設為會閃爍的特殊磚塊
+    non_tnt_indices = [i for i in range(len(new_bricks)) if not new_bricks[i].is_tnt]
+    if len(non_tnt_indices) >= 6:
+        blinking_indices = random.sample(non_tnt_indices, 6)
+    else:
+        blinking_indices = non_tnt_indices
+    for i in blinking_indices:
+        new_bricks[i].is_blinking = True
+        # 將基色改為較接近淡藍色，實際顏色由 draw 時 override
+        new_bricks[i].color = new_bricks[i].base_color
+
+    return new_bricks
+
+
 bricks = []
 row_colors = [
     (255, 99, 71),  # tomato
@@ -375,7 +540,10 @@ for row in range(BRICK_ROWS):
         x = BRICK_MARGIN_LEFT + col * (BRICK_WIDTH + BRICK_SPACING_X)
         y = BRICK_MARGIN_TOP + row * (BRICK_HEIGHT + BRICK_SPACING_Y)
         color = row_colors[row % len(row_colors)]
-        bricks.append(Brick(x, y, BRICK_WIDTH, BRICK_HEIGHT, color))
+        brick = Brick(x, y, BRICK_WIDTH, BRICK_HEIGHT, color)
+        brick.target_y = y  # 初始磚塊已在目標位置
+        brick.falling = False  # 不下落
+        bricks.append(brick)
 
 # 隨機選擇5個磚塊設為TNT磚塊
 tnt_indices = random.sample(range(len(bricks)), 5)
@@ -383,6 +551,17 @@ for i in tnt_indices:
     bricks[i].is_tnt = True
     # TNT磚塊使用較暗的顏色以便區分
     bricks[i].color = (139, 69, 19)  # 棕色
+
+# 選擇 6 個非TNT 的磚塊設為會閃爍的特殊磚塊
+non_tnt_indices = [i for i in range(len(bricks)) if not bricks[i].is_tnt]
+if len(non_tnt_indices) >= 6:
+    blinking_indices = random.sample(non_tnt_indices, 6)
+else:
+    blinking_indices = non_tnt_indices
+for i in blinking_indices:
+    bricks[i].is_blinking = True
+    # 將基色改為較接近淡藍色，實際顏色由 draw 時 override
+    bricks[i].color = bricks[i].base_color
 
 
 ###################### 建立玩家底板 ######################
@@ -409,18 +588,57 @@ BALL_COLOR = (255, 255, 0)  # 黃色
 BALL_SPEED = 7  # 移動速度（固定為12）
 BALL_MAX_SPEED = 9  # 保留常數，但速度不會改變
 
-# 建立球物件（初始位置會在update中設定為黏在底板上）
-ball = Ball(
+# 建立球物件（支援多球）。預設一顆黏在底板上
+balls = []
+main_ball = Ball(
     paddle.x + paddle.width // 2,
     paddle.y - BALL_RADIUS,
     BALL_RADIUS,
     BALL_COLOR,
     BALL_SPEED,
 )
+balls.append(main_ball)
 
 
 ###################### 遊戲狀態變數 ######################
 game_over = False
+score = 0  # 玩家得分
+font = pygame.font.Font(None, 36)  # 用於顯示文字的字體
+
+# 爆炸效果相關變數
+explosions = []  # 存儲所有正在進行的爆炸效果
+
+
+class Explosion:
+    """爆炸效果類別"""
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.radius = 0
+        self.max_radius = 80
+        self.duration = 30  # 爆炸持續幀數
+        self.timer = 0
+
+    def update(self):
+        """更新爆炸效果"""
+        self.timer += 1
+        self.radius = (self.timer / self.duration) * self.max_radius
+        return self.timer < self.duration
+
+    def draw(self, surface):
+        """繪製爆炸效果"""
+        if self.timer < self.duration:
+            # 創建多層圓圈效果
+            alpha = 255 - int((self.timer / self.duration) * 255)
+            for i in range(3):
+                radius = self.radius - i * 15
+                if radius > 0:
+                    color_intensity = max(0, alpha - i * 50)
+                    color = (255, min(255, color_intensity + 100), 0)  # 橙紅色
+                    pygame.draw.circle(
+                        surface, color, (int(self.x), int(self.y)), int(radius), 3
+                    )
 
 
 ###################### 主迴圈 ######################
@@ -435,35 +653,28 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_UP and ball.stuck:
-                ball.launch()  # 發射球
-            elif event.key == pygame.K_r and (
-                game_over or all(brick.hit for brick in bricks)
-            ):
-                # 重新開始遊戲（遊戲結束或勝利時）
+            if event.key == pygame.K_UP:
+                # 發射所有仍黏在底板上的球（通常是第一顆）
+                for b in balls:
+                    if b.stuck:
+                        b.launch()
+            elif event.key == pygame.K_r and game_over:
+                # 重新開始遊戲（僅遊戲結束時）
                 game_over = False
-                ball.stuck = True
-                ball.vx = 0
-                ball.vy = 0
-                # 停止繞圈並重置速度
-                ball.spinning = False
-                ball.speed = BALL_SPEED
+                score = 0  # 重置得分
+                explosions = []  # 清除爆炸效果
+                # 重置所有球回到單一主球
+                balls = []
+                main_ball = Ball(
+                    paddle.x + paddle.width // 2,
+                    paddle.y - BALL_RADIUS,
+                    BALL_RADIUS,
+                    BALL_COLOR,
+                    BALL_SPEED,
+                )
+                balls.append(main_ball)
                 # 重置所有磚塊
-                for brick in bricks:
-                    brick.hit = False
-                    brick.is_tnt = False
-                    # 重置顏色到原始顏色
-                    row = (brick.y - BRICK_MARGIN_TOP) // (
-                        BRICK_HEIGHT + BRICK_SPACING_Y
-                    )
-                    brick.color = row_colors[row % len(row_colors)]
-
-                # 重新隨機選擇5個磚塊設為TNT磚塊
-                tnt_indices = random.sample(range(len(bricks)), 5)
-                for i in tnt_indices:
-                    bricks[i].is_tnt = True
-                    # TNT磚塊使用較暗的顏色以便區分
-                    bricks[i].color = (139, 69, 19)  # 棕色
+                bricks = create_new_bricks()
 
     if not game_over:
         # 處理鍵盤輸入（連續按鍵）
@@ -473,8 +684,37 @@ while running:
         if keys[pygame.K_RIGHT]:
             paddle.move_right(WIDTH)
 
-        # 更新球的位置和碰撞檢測
-        if not ball.update(paddle, bricks, WIDTH, HEIGHT):
+        # 更新爆炸效果
+        explosions = [explosion for explosion in explosions if explosion.update()]
+
+        # 更新所有磚塊（處理 TNT 的閃爍倒數與爆炸）
+        now = pygame.time.get_ticks()
+        for brick in bricks:
+            # 所有磚塊都需要更新（包含下落動畫）
+            brick.update(now, bricks)
+
+        # 檢查是否所有磚塊都被摧毀，如果是，生成新的磚塊
+        if all(brick.hit for brick in bricks):
+            bricks = create_new_bricks()
+
+        # 更新所有球的位置與碰撞，並移除掉落出界的球
+        alive_any = False
+        remove_list = []
+        for b in balls:
+            # update 回傳 False 表示該球落出下方（死亡）
+            alive = b.update(paddle, bricks, WIDTH, HEIGHT, balls_list=balls)
+            if not alive:
+                remove_list.append(b)
+            else:
+                alive_any = True
+
+        # 移除死亡的球
+        for r in remove_list:
+            if r in balls:
+                balls.remove(r)
+
+        # 若沒有任何球存活，遊戲結束
+        if not alive_any:
             game_over = True
 
     # 繪製：先清空背景
@@ -488,51 +728,39 @@ while running:
         # 繪製玩家底板
         paddle.draw(screen)
 
-        # 若已勝利並開始繞圈，更新並繪製繞圈位置；否則正常繪製球
-        all_bricks_hit = all(brick.hit for brick in bricks)
-        if all_bricks_hit:
-            # 顯示勝利訊息
-            font = pygame.font.Font(None, 74)
-            text = font.render("YOU WIN!", True, (0, 255, 0))
-            text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
-            screen.blit(text, text_rect)
+        # 繪製所有球
+        for b in balls:
+            b.draw(screen)
 
-            restart_text = pygame.font.Font(None, 36).render(
-                "Press R to restart", True, (255, 255, 255)
-            )
-            restart_rect = restart_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50))
-            screen.blit(restart_text, restart_rect)
+        # 繪製爆炸效果
+        for explosion in explosions:
+            explosion.draw(screen)
 
-            # 若還沒開始繞圈就啟動
-            if not ball.spinning:
-                # 讓球繞在 "YOU WIN" 文字中央附近
-                win_center_x = WIDTH // 2
-                win_center_y = HEIGHT // 2
-                ball.start_spin(win_center_x, win_center_y, radius=100)
-
-            # 每幀更新繞圈位置並繪製球
-            ball.update_spin()
-            ball.draw(screen)
-        else:
-            # 正常繪製球
-            ball.draw(screen)
-        # end if all_bricks_hit
+        # 在右上角顯示得分
+        score_text = font.render(f"Score: {score}", True, (255, 255, 255))
+        score_rect = score_text.get_rect()
+        score_rect.topright = (WIDTH - 10, 10)
+        screen.blit(score_text, score_rect)
     else:
         # 遊戲結束畫面
-        font = pygame.font.Font(None, 74)
-        text = font.render("GAME OVER", True, (255, 0, 0))
-        text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+        font_large = pygame.font.Font(None, 74)
+        text = font_large.render("GAME OVER", True, (255, 0, 0))
+        text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 30))
         screen.blit(text, text_rect)
 
-        restart_text = pygame.font.Font(None, 36).render(
-            "Press R to restart", True, (255, 255, 255)
-        )
+        # 顯示最終得分
+        score_text = font.render(f"Final Score: {score}", True, (255, 255, 255))
+        score_rect = score_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 10))
+        screen.blit(score_text, score_rect)
+
+        restart_text = font.render("Press R to restart", True, (255, 255, 255))
         restart_rect = restart_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50))
         screen.blit(restart_text, restart_rect)
 
     # 若遊戲開始時，顯示提示訊息
-    if ball.stuck and not game_over:
-        font = pygame.font.Font(None, 36)
+    # 若有任何球還黏在底板上且遊戲未結束，顯示提示
+    any_stuck = any(b.stuck for b in balls)
+    if any_stuck and not game_over:
         text = font.render("Press UP to launch ball", True, (255, 255, 255))
         text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT - 100))
         screen.blit(text, text_rect)
