@@ -3,7 +3,9 @@
 這是個簡單的敲磚塊遊戲專案（single-file demo）。
 
 說明：
+
 - 執行：
+
   - 在有 Python 的環境下：
     ```bash
     python3 main.py
