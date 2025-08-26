@@ -68,16 +68,31 @@ class Brick:
             draw_color = self.color
             # 如果是會閃爍的磚塊，計算漸變色（淡藍色的亮/微暗變化）
             if self.is_blinking:
-                # 淡藍色基準（亮亮的淡藍色）
-                color_a = (173, 216, 230)  # lightblue
-                color_b = (224, 255, 255)  # 更亮的淡藍
+                # 使用多段藍色調來擴大閃爍的色階幅度：
+                # 淺藍 -> 天空藍 -> 皇家藍 -> 深藍
+                palette = [
+                    (173, 216, 230),  # lightblue
+                    (135, 206, 250),  # skyblue
+                    (65, 105, 225),  # royal blue
+                    (0, 0, 139),  # dark blue
+                ]
+                # 計算 0..1 的週期值，使用正弦讓變化平滑
                 t = (pygame.time.get_ticks() + self.blink_offset) % self.blink_period
-                # 產生 0..1 的週期值，使用正弦讓變化平滑
                 factor = (math.sin(2 * math.pi * (t / self.blink_period)) * 0.5) + 0.5
+
+                # 將 factor 映射到 palette 的多段區間並做線性內插
+                segs = len(palette) - 1
+                scaled = factor * segs
+                idx = int(scaled)
+                frac = scaled - idx
+                # 保險處理邊界
+                idx = max(0, min(idx, segs - 1))
+                c1 = palette[idx]
+                c2 = palette[min(idx + 1, segs)]
                 draw_color = (
-                    int(color_a[0] * (1 - factor) + color_b[0] * factor),
-                    int(color_a[1] * (1 - factor) + color_b[1] * factor),
-                    int(color_a[2] * (1 - factor) + color_b[2] * factor),
+                    int(c1[0] * (1 - frac) + c2[0] * frac),
+                    int(c1[1] * (1 - frac) + c2[1] * frac),
+                    int(c1[2] * (1 - frac) + c2[2] * frac),
                 )
 
             # 如果是被觸發的 TNT，優先以紅/白閃爍顏色顯示
@@ -199,6 +214,11 @@ def explode_tnt(tnt_brick, all_bricks):
             if distance <= explosion_radius:
                 # 這個磚塊會被炸掉
                 brick.hit = True
+                # 產生碎片
+                try:
+                    spawn_shards(brick, count=10)
+                except Exception:
+                    pass
                 exploded_count += 1
                 score += 100  # 每個被炸掉的磚塊得100分
 
@@ -355,6 +375,11 @@ class Ball:
                 else:
                     # 非 TNT 磚塊直接標記為被擊中
                     brick.hit = True
+                    # 產生碎片效果
+                    try:
+                        spawn_shards(brick, count=8)
+                    except Exception:
+                        pass
                     # 增加得分（全域變數）
                     global score
                     score += 100
@@ -607,6 +632,9 @@ font = pygame.font.Font(None, 36)  # 用於顯示文字的字體
 
 # 爆炸效果相關變數
 explosions = []  # 存儲所有正在進行的爆炸效果
+# 磚塊碎片 (shards) 與彩蛋 (eggs)
+shards = []
+eggs = []
 
 
 class Explosion:
@@ -639,6 +667,116 @@ class Explosion:
                     pygame.draw.circle(
                         surface, color, (int(self.x), int(self.y)), int(radius), 3
                     )
+
+
+###################### 磚塊碎片 (碎片效果) ######################
+class Shard:
+    """磚塊碎片小方塊，簡單的物理與生命週期"""
+
+    def __init__(self, x, y, color):
+        self.x = float(x)
+        self.y = float(y)
+        # 初始速度帶有隨機性
+        self.vx = random.uniform(-4.0, 4.0)
+        self.vy = random.uniform(-7.0, -2.0)
+        self.size = random.randint(2, 6)
+        self.color = color
+        self.life = random.randint(40, 80)  # 幀數
+        self.timer = 0
+
+    def update(self):
+        # 重力
+        self.vy += 0.35
+        # 空氣阻力
+        self.vx *= 0.995
+        self.vy *= 0.999
+        self.x += self.vx
+        self.y += self.vy
+        self.timer += 1
+        # 邊界外或生命結束就移除
+        if self.timer >= self.life or self.y > HEIGHT + 200:
+            return False
+        return True
+
+    def draw(self, surface):
+        pygame.draw.rect(
+            surface,
+            self.color,
+            pygame.Rect(int(self.x), int(self.y), self.size, self.size),
+        )
+
+
+###################### 彩蛋 (可被撿取) ######################
+class Egg:
+    """簡單的彩蛋物件，會緩慢下落，碰到板子則觸發撿取效果"""
+
+    def __init__(self, x, y):
+        self.x = float(x)
+        self.y = float(y)
+        self.vy = random.uniform(1.0, 3.0)
+        self.radius = 8
+        self.collected = False
+        # 顏色與裝飾
+        self.color = (255, 192, 203)  # 粉紅
+
+    def update(self):
+        self.y += self.vy
+        # 若落出畫面則刪除
+        return not self.collected and self.y < HEIGHT + 100
+
+    def draw(self, surface):
+        rect = pygame.Rect(
+            int(self.x) - self.radius,
+            int(self.y) - self.radius,
+            self.radius * 2,
+            self.radius * 2,
+        )
+        pygame.draw.ellipse(surface, self.color, rect)
+        # 白色高光
+        pygame.draw.ellipse(
+            surface,
+            (255, 255, 255),
+            (int(self.x) - 3, int(self.y) - self.radius + 2, 6, 4),
+        )
+
+
+###################### 輔助：生成碎片與彩蛋 ######################
+def spawn_shards(brick, count=10):
+    """從磚塊位置產生碎片"""
+    for _ in range(count):
+        sx = random.uniform(brick.x, brick.x + brick.width)
+        sy = random.uniform(brick.y, brick.y + brick.height)
+        # 使用磚塊原色作為碎片顏色
+        color = getattr(brick, "base_color", brick.color)
+        shards.append(Shard(sx, sy, color))
+
+
+def spawn_eggs_from_bricks(bricks_list, num_eggs=5):
+    """根據剛清完的磚塊清單，產生一些彩蛋。彩蛋生成後會獨立存在，並且不要阻塞下一輪。"""
+    available = [b for b in bricks_list]
+    if not available:
+        return
+    # 從被清掉的磚隨機挑一些位置來生成彩蛋；若不足，則在畫面上方隨機生成
+    positions = []
+    # 優先使用已被打掉的磚的位置（避免使用還沒被打掉的磚）
+    dead_bricks = [b for b in bricks_list if b.hit]
+    if dead_bricks:
+        sample_src = dead_bricks
+    else:
+        sample_src = bricks_list
+
+    for i in range(num_eggs):
+        src = random.choice(sample_src)
+        cx = src.x + src.width / 2
+        cy = src.y + src.height / 2
+        # 把彩蛋稍微往上偏移，讓它看起來從爆炸或碎片處生成
+        ex = cx + random.uniform(-20, 20)
+        ey = cy + random.uniform(-10, 10)
+        # 若該座標在畫面外（例如原本磚塊滑入時的負 y），調整到畫面上方
+        if ey < 0:
+            ey = random.uniform(20, 80)
+            ex = random.uniform(60, WIDTH - 60)
+        eggs.append(Egg(ex, ey))
 
 
 ###################### 主迴圈 ######################
@@ -693,8 +831,10 @@ while running:
             # 所有磚塊都需要更新（包含下落動畫）
             brick.update(now, bricks)
 
-        # 檢查是否所有磚塊都被摧毀，如果是，生成新的磚塊
+        # 檢查是否所有磚塊都被摧毀，如果是，先產生彩蛋（從剛清完的磚塊位置）
+        # 然後立即進入下一輪（不等待彩蛋被撿取）
         if all(brick.hit for brick in bricks):
+            # 原本會在此同時產生彩蛋，但該需求已刪除，僅切換到下一輪
             bricks = create_new_bricks()
 
         # 更新所有球的位置與碰撞，並移除掉落出界的球
@@ -717,6 +857,29 @@ while running:
         if not alive_any:
             game_over = True
 
+        # 更新碎片
+        shards = [s for s in shards if s.update()]
+
+        # 更新彩蛋並檢查是否被撿取（碰到底板）
+        remaining_eggs = []
+        for egg in eggs:
+            alive = egg.update()
+            if not alive:
+                continue
+            # 檢查與底板的簡單碰撞
+            if (
+                egg.y + egg.radius >= paddle.y
+                and egg.x >= paddle.x
+                and egg.x <= paddle.x + paddle.width
+            ):
+                # 撿取效果：加分並標記為收集
+                egg.collected = True
+                score += 250
+                # 可在這裡加入其他強化效果（例如加寬底板）
+                continue
+            remaining_eggs.append(egg)
+        eggs = remaining_eggs
+
     # 繪製：先清空背景
     screen.fill((0, 0, 0))  # 黑色背景
 
@@ -731,6 +894,14 @@ while running:
         # 繪製所有球
         for b in balls:
             b.draw(screen)
+
+        # 繪製碎片
+        for s in shards:
+            s.draw(screen)
+
+        # 繪製彩蛋
+        for e in eggs:
+            e.draw(screen)
 
         # 繪製爆炸效果
         for explosion in explosions:
