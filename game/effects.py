@@ -5,15 +5,19 @@
 包含爆炸效果、磚塊碎片、彩蛋等視覺特效類別。
 """
 
+######################載入套件######################
 import pygame
 import math
 import random
+
+######################導入設定######################
 from config import EFFECTS_CONFIG, COLORS
 
+######################音效載入######################
 # 嘗試載入爆炸音效（若不存在則忽略）
 EXPLOSION_SOUND = None
 try:
-    # mixer 可能尚未初始化，但 pygame.init() 通常會初始化 mixer
+    # 檢查 mixer 是否已初始化
     if not pygame.mixer.get_init():
         try:
             pygame.mixer.init()
@@ -22,24 +26,59 @@ try:
     sound_path = "assets/sounds/explosion.wav"
     EXPLOSION_SOUND = pygame.mixer.Sound(sound_path)
 except Exception:
+    # 如果載入失敗就不播放音效，遊戲仍然可以正常運行
     EXPLOSION_SOUND = None
 
 
+######################物件類別######################
+
+
 class Explosion:
-    """爆炸效果類別"""
+    """
+    爆炸效果類別\n
+    \n
+    產生擴散式的圓圈爆炸動畫，用於 TNT 爆炸時的視覺效果。\n
+    爆炸會從小圓圈逐漸擴大，顏色從亮橙色漸變到透明。\n
+    \n
+    特性:\n
+    1. 多層圓圈效果，創造深度感\n
+    2. 漸變透明度，模擬爆炸消散\n
+    3. 自動播放音效（如果有載入）\n
+    \n
+    屬性:\n
+    x, y (float): 爆炸中心座標\n
+    radius (float): 當前爆炸半徑\n
+    max_radius (int): 最大爆炸半徑\n
+    duration (int): 爆炸持續的幀數\n
+    timer (int): 當前經過的幀數\n
+    \n
+    使用範例:\n
+    explosion = Explosion(100, 200)  # 在指定位置創建爆炸\n
+    while explosion.update():  # 每幀更新\n
+        explosion.draw(screen)  # 繪製爆炸效果\n
+    """
 
     def __init__(self, x, y):
+        """
+        初始化爆炸效果\n
+        \n
+        參數:\n
+        x (float): 爆炸中心 X 座標\n
+        y (float): 爆炸中心 Y 座標\n
+        """
         self.x = x
         self.y = y
-        self.radius = 0
+        self.radius = 0  # 從 0 開始擴散
         self.max_radius = EFFECTS_CONFIG["EXPLOSION_MAX_RADIUS"]
         self.duration = EFFECTS_CONFIG["EXPLOSION_DURATION"]
         self.timer = 0
-        # 嘗試播放爆炸音效（如果有載入）
+
+        # 嘗試播放爆炸音效（如果有載入的話）
         try:
             if EXPLOSION_SOUND:
                 EXPLOSION_SOUND.play()
         except Exception:
+            # 音效播放失敗也不影響遊戲運行
             pass
 
     def update(self):

@@ -5,148 +5,179 @@
 包含所有遊戲常數和設定參數，方便調整遊戲體驗。
 """
 
-# 視窗設定
-WINDOW_WIDTH = 800
-WINDOW_HEIGHT = 600
-WINDOW_TITLE = "敲磚塊遊戲"
-FPS = 60
+######################視窗設定######################
+# 遊戲視窗的大小和基本設定
+WINDOW_WIDTH = 800  # 視窗寬度（像素）
+WINDOW_HEIGHT = 600  # 視窗高度（像素）
+WINDOW_TITLE = "敲磚塊遊戲"  # 視窗標題
+FPS = 60  # 每秒幀數，控制遊戲速度
 
-# 顏色設定 (R, G, B)
+######################顏色設定######################
+# 所有遊戲用到的顏色，使用 RGB 數值 (紅, 綠, 藍)
 COLORS = {
-    "BLACK": (0, 0, 0),
-    "WHITE": (255, 255, 255),
-    "RED": (255, 0, 0),
-    "GREEN": (0, 255, 0),
-    "BLUE": (0, 0, 255),
-    "YELLOW": (255, 255, 0),
-    "ORANGE": (255, 165, 0),
-    "PURPLE": (128, 0, 128),
-    "PINK": (255, 192, 203),
-    # 磚塊顏色
-    "BRICK_TOMATO": (255, 99, 71),
-    "BRICK_ORANGE": (255, 165, 0),
-    "BRICK_GOLD": (255, 215, 0),
-    "BRICK_SEA_GREEN": (60, 179, 113),
-    "BRICK_ROYAL_BLUE": (65, 105, 225),
-    "BRICK_TNT": (139, 69, 19),  # 棕色
+    # 基礎色彩
+    "BLACK": (0, 0, 0),  # 黑色，通常用作背景
+    "WHITE": (255, 255, 255),  # 白色，通常用於文字
+    "RED": (255, 0, 0),  # 紅色
+    "GREEN": (0, 255, 0),  # 綠色
+    "BLUE": (0, 0, 255),  # 藍色
+    "YELLOW": (255, 255, 0),  # 黃色
+    "ORANGE": (255, 165, 0),  # 橙色
+    "PURPLE": (128, 0, 128),  # 紫色
+    "PINK": (255, 192, 203),  # 粉紅色
+    # 磚塊專用顏色，讓不同行的磚塊有不同顏色
+    "BRICK_TOMATO": (255, 99, 71),  # 番茄紅
+    "BRICK_ORANGE": (255, 165, 0),  # 橙色
+    "BRICK_GOLD": (255, 215, 0),  # 金色
+    "BRICK_SEA_GREEN": (60, 179, 113),  # 海綠色
+    "BRICK_ROYAL_BLUE": (65, 105, 225),  # 皇家藍
+    "BRICK_TNT": (139, 69, 19),  # 棕色，用於 TNT 磚塊
     # 特殊效果顏色
-    "EXPLOSION_ORANGE": (255, 165, 0),
-    "SHARD_COLORS": [(255, 99, 71), (255, 165, 0), (255, 215, 0)],
-    # 閃爍磚塊調色盤
+    "EXPLOSION_ORANGE": (255, 165, 0),  # 爆炸效果用的橙色
+    "SHARD_COLORS": [(255, 99, 71), (255, 165, 0), (255, 215, 0)],  # 碎片的顏色選項
+    # 閃爍磚塊的顏色變化，會在這些顏色間漸變
     "BLINK_PALETTE": [
-        (173, 216, 230),  # lightblue
-        (135, 206, 250),  # skyblue
-        (65, 105, 225),  # royal blue
-        (0, 0, 139),  # dark blue
+        (173, 216, 230),  # 淺藍色
+        (135, 206, 250),  # 天空藍
+        (65, 105, 225),  # 皇家藍
+        (0, 0, 139),  # 深藍色
     ],
 }
 
-# 磚塊設定
+######################磚塊設定######################
+# 控制磚塊的排列、大小、數量等設定
 BRICK_CONFIG = {
-    "COLS": 10,
-    "ROWS": 5,
-    "WIDTH": None,  # 動態計算
-    "HEIGHT": 30,
-    "MARGIN_LEFT": 40,
-    "MARGIN_TOP": 60,
-    "SPACING_X": 10,
-    "SPACING_Y": 10,
-    "TNT_COUNT": 5,  # TNT 磚塊數量
-    "BLINKING_COUNT": 6,  # 閃爍磚塊數量
+    "COLS": 10,  # 磚塊的列數（橫向有幾個）
+    "ROWS": 5,  # 磚塊的行數（縱向有幾排）
+    "WIDTH": None,  # 磚塊寬度（會根據視窗大小自動計算）
+    "HEIGHT": 30,  # 磚塊高度（像素）
+    "MARGIN_LEFT": 40,  # 左邊留白空間
+    "MARGIN_TOP": 60,  # 上方留白空間
+    "SPACING_X": 10,  # 磚塊之間的水平間距
+    "SPACING_Y": 10,  # 磚塊之間的垂直間距
+    "TNT_COUNT": 5,  # TNT 磚塊的數量
+    "BLINKING_COUNT": 6,  # 會閃爍的特殊磚塊數量
 }
 
-# 底板設定
+######################底板設定######################
+# 玩家控制的底板相關設定
 PADDLE_CONFIG = {
-    "WIDTH": 120,
-    "HEIGHT": 20,
-    "COLOR": COLORS["WHITE"],
-    "SPEED": 10,
-    "MARGIN_BOTTOM": 50,  # 距離底部的距離
+    "WIDTH": 120,  # 底板寬度
+    "HEIGHT": 20,  # 底板高度
+    "COLOR": COLORS["WHITE"],  # 底板顏色
+    "SPEED": 10,  # 底板移動速度（每次按鍵移動的像素數）
+    "MARGIN_BOTTOM": 50,  # 底板距離螢幕底部的距離
 }
 
-# 球設定
+######################球設定######################
+# 彈跳球的相關設定
 BALL_CONFIG = {
-    "RADIUS": 10,
-    "COLOR": COLORS["YELLOW"],
-    "SPEED": 7,
-    "MAX_SPEED": 9,
+    "RADIUS": 10,  # 球的半徑
+    "COLOR": COLORS["YELLOW"],  # 球的顏色
+    "SPEED": 7,  # 球的移動速度
+    "MAX_SPEED": 9,  # 球的最大速度限制
 }
 
-# TNT 設定
+######################TNT 設定######################
+# TNT 爆炸磚塊的相關設定
 TNT_CONFIG = {
-    "EXPLOSION_RADIUS": 100,  # 爆炸半徑（像素）
-    "BLINK_DURATION": 500,  # 閃爍持續時間（毫秒）
-    "BLINK_REPEATS": 3,  # 閃爍重複次數
-    "SCORE_PER_EXPLOSION": 100,  # TNT 爆炸得分
+    "EXPLOSION_RADIUS": 100,  # 爆炸影響範圍（像素），在這範圍內的磚塊都會被炸掉
+    "BLINK_DURATION": 500,  # 單次閃爍持續時間（毫秒）
+    "BLINK_REPEATS": 3,  # 爆炸前總共閃爍幾次
+    "SCORE_PER_EXPLOSION": 100,  # TNT 爆炸時獲得的分數
 }
 
-# 特效設定
+######################特效設定######################
+# 視覺特效相關設定（爆炸、碎片等）
 EFFECTS_CONFIG = {
-    "EXPLOSION_MAX_RADIUS": 80,
-    "EXPLOSION_DURATION": 30,  # 爆炸持續幀數
-    "SHARD_COUNT": 10,  # 每個磚塊產生的碎片數量
-    "SHARD_LIFE_MIN": 40,  # 碎片最小生命週期（幀）
-    "SHARD_LIFE_MAX": 80,  # 碎片最大生命週期（幀）
-    "SHARD_SIZE_MIN": 2,  # 碎片最小尺寸
-    "SHARD_SIZE_MAX": 6,  # 碎片最大尺寸
-    "GRAVITY": 0.35,  # 重力加速度
-    "AIR_RESISTANCE": 0.995,  # 空氣阻力係數
+    "EXPLOSION_MAX_RADIUS": 80,  # 爆炸動畫的最大半徑
+    "EXPLOSION_DURATION": 30,  # 爆炸動畫持續的幀數
+    "SHARD_COUNT": 10,  # 每個磚塊被打破時產生的碎片數量
+    "SHARD_LIFE_MIN": 40,  # 碎片最短生命週期（幀數）
+    "SHARD_LIFE_MAX": 80,  # 碎片最長生命週期（幀數）
+    "SHARD_SIZE_MIN": 2,  # 碎片最小尺寸（像素）
+    "SHARD_SIZE_MAX": 6,  # 碎片最大尺寸（像素）
+    "GRAVITY": 0.35,  # 重力加速度，影響碎片下落速度
+    "AIR_RESISTANCE": 0.995,  # 空氣阻力係數，讓碎片逐漸減速
 }
 
-# 閃爍磚塊設定
+######################閃爍磚塊設定######################
+# 會閃爍的特殊磚塊設定
 BLINKING_CONFIG = {
-    "PERIOD": 1200,  # 閃爍週期（毫秒）
-    "EXTRA_BALLS": 2,  # 撞擊時產生的額外球數
+    "PERIOD": 1200,  # 閃爍週期（毫秒），控制顏色變化的速度
+    "EXTRA_BALLS": 2,  # 擊中閃爍磚塊時會產生額外球的數量
 }
 
-# 得分設定
+######################得分設定######################
+# 各種動作的得分設定
 SCORE_CONFIG = {
-    "BRICK_HIT": 100,  # 擊中普通磚塊得分
-    "TNT_EXPLOSION": 100,  # TNT 爆炸得分
+    "BRICK_HIT": 100,  # 擊中普通磚塊的得分
+    "TNT_EXPLOSION": 100,  # TNT 爆炸的得分
     "TNT_DESTROYED": 100,  # 被 TNT 炸掉的磚塊得分
-    "EGG_COLLECTED": 250,  # 撿取彩蛋得分
+    "EGG_COLLECTED": 250,  # 撿到彩蛋的得分
 }
 
-# 字體設定
+######################字體設定######################
+# 遊戲中文字顯示的字體大小設定
 FONT_CONFIG = {
-    "DEFAULT_SIZE": 36,
-    "LARGE_SIZE": 74,
-    "TNT_TEXT_SIZE": 24,
+    "DEFAULT_SIZE": 36,  # 一般文字的字體大小
+    "LARGE_SIZE": 74,  # 大標題的字體大小
+    "TNT_TEXT_SIZE": 24,  # TNT 磚塊上文字的大小
 }
 
-# 物理設定
+######################物理設定######################
+# 遊戲物理相關的設定
 PHYSICS_CONFIG = {
-    "BOUNCE_ANGLE_MAX": 60,  # 最大反彈角度（度）
-    "FALL_SPEED": 2,  # 磚塊下落速度
+    "BOUNCE_ANGLE_MAX": 60,  # 球撞擊底板時的最大反彈角度（度）
+    "FALL_SPEED": 2,  # 磚塊下落的速度
 }
 
-# 遊戲規則設定
+######################遊戲規則設定######################
+# 遊戲流程和規則的設定
 GAME_CONFIG = {
-    "TOTAL_BRICKS": BRICK_CONFIG["COLS"] * BRICK_CONFIG["ROWS"],
-    "AUTO_RESTART": False,  # 是否自動重新開始
-    "SHOW_DEBUG_INFO": False,  # 是否顯示除錯資訊
+    "TOTAL_BRICKS": BRICK_CONFIG["COLS"] * BRICK_CONFIG["ROWS"],  # 總磚塊數量
+    "AUTO_RESTART": False,  # 遊戲結束後是否自動重新開始
+    "SHOW_DEBUG_INFO": False,  # 是否顯示除錯資訊（邊界框等）
 }
 
 
-# 計算動態設定值
+######################定義函式區######################
+
+
 def calculate_brick_width():
-    """計算磚塊寬度以填滿可用空間"""
+    """
+    計算磚塊寬度以填滿可用空間\n
+    \n
+    根據視窗寬度、邊距和磚塊數量，計算出每個磚塊應該有多寬\n
+    才能剛好填滿整個可用空間，讓磚塊排列看起來整齊美觀\n
+    \n
+    計算公式:\n
+    可用寬度 = 視窗寬度 - 左右邊距 - 磚塊間隙總寬度\n
+    磚塊寬度 = 可用寬度 / 磚塊列數\n
+    \n
+    回傳:\n
+    int: 計算出的磚塊寬度（像素）\n
+    """
+    # 計算扣除邊距和間隙後，實際可用來放磚塊的寬度
     available_width = (
-        WINDOW_WIDTH
-        - 2 * BRICK_CONFIG["MARGIN_LEFT"]
-        - (BRICK_CONFIG["COLS"] - 1) * BRICK_CONFIG["SPACING_X"]
+        WINDOW_WIDTH  # 視窗總寬度
+        - 2 * BRICK_CONFIG["MARGIN_LEFT"]  # 扣除左右邊距
+        - (BRICK_CONFIG["COLS"] - 1) * BRICK_CONFIG["SPACING_X"]  # 扣除磚塊間的間隙
     )
+    # 將可用寬度平均分配給所有磚塊列
     return available_width // BRICK_CONFIG["COLS"]
 
 
-# 設定動態計算的值
+######################初始化設定######################
+
+# 根據視窗大小動態計算磚塊寬度，讓磚塊剛好填滿畫面
 BRICK_CONFIG["WIDTH"] = calculate_brick_width()
 
-# 磚塊行顏色配置
+# 定義每一行磚塊的顏色，讓遊戲看起來更豐富多彩
 ROW_COLORS = [
-    COLORS["BRICK_TOMATO"],
-    COLORS["BRICK_ORANGE"],
-    COLORS["BRICK_GOLD"],
-    COLORS["BRICK_SEA_GREEN"],
-    COLORS["BRICK_ROYAL_BLUE"],
+    COLORS["BRICK_TOMATO"],  # 第一行：番茄紅
+    COLORS["BRICK_ORANGE"],  # 第二行：橙色
+    COLORS["BRICK_GOLD"],  # 第三行：金色
+    COLORS["BRICK_SEA_GREEN"],  # 第四行：海綠色
+    COLORS["BRICK_ROYAL_BLUE"],  # 第五行：皇家藍
 ]

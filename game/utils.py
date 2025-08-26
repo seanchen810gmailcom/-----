@@ -5,24 +5,46 @@
 包含 TNT 爆炸處理、碎片生成、彩蛋生成等輔助函數。
 """
 
+######################載入套件######################
 import math
 import random
 from collections import deque
+
+######################導入設定######################
 from config import TNT_CONFIG, EFFECTS_CONFIG, SCORE_CONFIG
 
 
+######################全域變數######################
+# 用於與主程式通信的全域變數
+_game_state = None
+
+
+######################定義函式區######################
+
+
 def explode_tnt(tnt_brick, all_bricks):
-    """處理TNT磚塊爆炸，炸掉周圍的磚塊。
-
-    參數：
-    - tnt_brick: 被擊中的TNT磚塊
-    - all_bricks: 所有磚塊的列表
-
-    返回：
-    - 被炸掉的磚塊數量
     """
-    # 這些變數需要在主程式中定義
-    global score, explosions
+    處理TNT磚塊爆炸，炸掉周圍的磚塊\n
+    \n
+    使用廣度優先搜索（BFS）算法處理連鎖爆炸，\n
+    避免遞迴深度過深的問題。當 TNT 爆炸時，\n
+    會炸掉範圍內的所有磚塊，如果範圍內有其他 TNT\n
+    也會觸發連鎖爆炸。\n
+    \n
+    參數:\n
+    tnt_brick (Brick): 被擊中的 TNT 磚塊\n
+    all_bricks (list): 所有磚塊的列表\n
+    \n
+    回傳:\n
+    int: 被炸掉的磚塊數量（包含 TNT 本身）\n
+    \n
+    算法說明:\n
+    1. 使用佇列處理連鎖爆炸，避免遞迴\n
+    2. 每個 TNT 爆炸都會產生視覺效果\n
+    3. 計算距離時使用歐幾里得距離\n
+    4. 被炸到的 TNT 會加入佇列等待處理\n
+    """
+    global _game_state
 
     # 使用佇列處理連鎖爆炸（BFS）
     exploded_count = 0
@@ -34,21 +56,21 @@ def explode_tnt(tnt_brick, all_bricks):
     explosion_x = tnt_brick.x + tnt_brick.width // 2
     explosion_y = tnt_brick.y + tnt_brick.height // 2
 
-    # 創建爆炸效果（需要在主程式中導入）
+    # 創建爆炸效果
     try:
         from .effects import Explosion
 
-        if "explosions" in globals():
-            explosions.append(Explosion(explosion_x, explosion_y))
-    except:
+        if _game_state:
+            _game_state.explosions.append(Explosion(explosion_x, explosion_y))
+    except Exception:
         pass
 
     # 若傳入的 tnt_brick 尚未被標記為 hit，則先標記並計數
     if not tnt_brick.hit:
         tnt_brick.hit = True
         exploded_count += 1
-        if "score" in globals():
-            score += SCORE_CONFIG["TNT_EXPLOSION"]
+        if _game_state:
+            _game_state.score += SCORE_CONFIG["TNT_EXPLOSION"]
 
     # 將這顆 TNT 加入處理佇列以檢查其範圍內的磚塊
     queue.append(tnt_brick)
@@ -73,13 +95,14 @@ def explode_tnt(tnt_brick, all_bricks):
                 # 這個磚塊會被炸掉
                 brick.hit = True
                 # 產生碎片
-                try:
-                    spawn_shards(brick, count=10)
-                except Exception:
-                    pass
+                if _game_state:
+                    try:
+                        spawn_shards(brick, count=10)
+                    except Exception:
+                        pass
                 exploded_count += 1
-                if "score" in globals():
-                    score += SCORE_CONFIG["TNT_DESTROYED"]
+                if _game_state:
+                    _game_state.score += SCORE_CONFIG["TNT_DESTROYED"]
 
                 # 如果被炸到的也是TNT，加入佇列以觸發連鎖，並添加爆炸效果
                 if brick.is_tnt:
@@ -89,9 +112,11 @@ def explode_tnt(tnt_brick, all_bricks):
                     try:
                         from .effects import Explosion
 
-                        if "explosions" in globals():
-                            explosions.append(Explosion(explosion_x, explosion_y))
-                    except:
+                        if _game_state:
+                            _game_state.explosions.append(
+                                Explosion(explosion_x, explosion_y)
+                            )
+                    except Exception:
                         pass
 
     return exploded_count
@@ -99,7 +124,7 @@ def explode_tnt(tnt_brick, all_bricks):
 
 def spawn_shards(brick, count=None):
     """從磚塊位置產生碎片"""
-    global shards
+    global _game_state
 
     if count is None:
         count = EFFECTS_CONFIG["SHARD_COUNT"]
@@ -107,25 +132,25 @@ def spawn_shards(brick, count=None):
     try:
         from .effects import Shard
 
-        if "shards" in globals():
+        if _game_state:
             for _ in range(count):
                 sx = random.uniform(brick.x, brick.x + brick.width)
                 sy = random.uniform(brick.y, brick.y + brick.height)
                 # 使用磚塊原色作為碎片顏色
                 color = getattr(brick, "base_color", brick.color)
-                shards.append(Shard(sx, sy, color))
+                _game_state.shards.append(Shard(sx, sy, color))
     except Exception:
         pass
 
 
 def spawn_eggs_from_bricks(bricks_list, num_eggs=5):
     """根據剛清完的磚塊清單，產生一些彩蛋。"""
-    global eggs
+    global _game_state
 
     try:
         from .effects import Egg
 
-        if "eggs" not in globals():
+        if not _game_state:
             return
 
         available = [b for b in bricks_list]
@@ -150,7 +175,7 @@ def spawn_eggs_from_bricks(bricks_list, num_eggs=5):
             if ey < 0:
                 ey = random.uniform(20, 80)
                 ex = random.uniform(60, 800 - 60)  # 假設螢幕寬度800
-            eggs.append(Egg(ex, ey))
+            _game_state.eggs.append(Egg(ex, ey))
     except Exception:
         pass
 
