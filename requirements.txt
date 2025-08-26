@@ -1,0 +1,22 @@
+# 敲磚塊遊戲 - 依賴套件
+
+# 核心遊戲依賴
+pygame>=2.1.0
+
+# 開發和測試工具
+coverage>=6.0
+unittest-xml-reporting>=3.2.0
+
+# 程式碼品質工具
+flake8>=4.0.0
+black>=22.0.0
+isort>=5.10.0
+
+# 文檔生成
+Sphinx>=4.0.0
+sphinx-rtd-theme>=1.0.0
+
+# 打包工具
+setuptools>=60.0.0
+wheel>=0.37.0
+build>=0.7.0
